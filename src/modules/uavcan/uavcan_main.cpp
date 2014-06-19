@@ -50,7 +50,7 @@
 /**
  * @file uavcan_main.cpp
  *
- * Implements basic functinality of UAVCAN node.
+ * Implements basic functionality of UAVCAN node.
  *
  * @author Pavel Kirienko <pavel.kirienko@gmail.com>
  */
@@ -65,11 +65,6 @@ UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &sys
 	_node(can_driver, system_clock),
 	_esc_controller(_node)
 {
-	_control_topics[0] = ORB_ID(actuator_controls_0);
-	_control_topics[1] = ORB_ID(actuator_controls_1);
-	_control_topics[2] = ORB_ID(actuator_controls_2);
-	_control_topics[3] = ORB_ID(actuator_controls_3);
-
 	// memset(_controls, 0, sizeof(_controls));
 	// memset(_poll_fds, 0, sizeof(_poll_fds));
 }
@@ -218,9 +213,6 @@ int UavcanNode::run()
 	// XXX figure out the output count
 	_output_count = 2;
 
-
-	_armed_sub = orb_subscribe(ORB_ID(actuator_armed));
-
 	actuator_outputs_s outputs;
 	memset(&outputs, 0, sizeof(outputs));
 
@@ -231,18 +223,11 @@ int UavcanNode::run()
 		_task_should_exit = true;
 	}
 
-	/*
-	 * XXX Mixing logic/subscriptions shall be moved into UavcanEscController::update();
-	 *     IO multiplexing shall be done here.
-	 */
-
 	_node.setStatusOk();
 
 	while (!_task_should_exit) {
 
-		if (_groups_subscribed != _groups_required) {
-			subscribe();
-			_groups_subscribed = _groups_required;
+		if (_poll_fds_num == 0) {
 			/*
 			 * This event is needed to wake up the thread on CAN bus activity (RX/TX/Error).
 			 * Please note that with such multiplexing it is no longer possible to rely only on
@@ -257,75 +242,32 @@ int UavcanNode::run()
 
 		const int poll_ret = ::poll(_poll_fds, _poll_fds_num, PollTimeoutMs);
 
+		/*
+		 * If a bus event is detected or the timeout occurred, the CAN bus
+		 * node will spin once and re-enter the loop.
+		 */
 		node_spin_once();  // Non-blocking
 
-		// this would be bad...
+		// Check the state of poll return value
 		if (poll_ret < 0) {
+			// Error occured
 			log("poll error %d", errno);
 			continue;
+		} else if (poll_ret == 0) {
+			// Timeout occurred
+
 		} else {
-			// get controls for required topics
+
+			// CAN bus event
+			// Don't think that I need to do anything here
 			bool controls_updated = false;
 			unsigned poll_id = 0;
-			for (unsigned i = 0; i < NUM_ACTUATOR_CONTROL_GROUPS; i++) {
-				if (_control_subs[i] > 0) {
-					if (_poll_fds[poll_id].revents & POLLIN) {
-						controls_updated = true;
-						orb_copy(_control_topics[i], _control_subs[i], &_controls[i]);
-					}
-					poll_id++;
-				}
-			}
+			if (_poll_fds[poll_id].revents & POLLIN) {
 
-			if (!controls_updated) {
-				// timeout: no control data, switch to failsafe values
-				// XXX trigger failsafe
-			}
-
-			//can we mix?
-			if (controls_updated && (_mixers != nullptr)) {
-
-				// XXX one output group has 8 outputs max,
-				// but this driver could well serve multiple groups.
-				unsigned num_outputs_max = 8;
-
-				// Do mixing
-				outputs.noutputs = _mixers->mix(&outputs.output[0], num_outputs_max);
-				outputs.timestamp = hrt_absolute_time();
-
-				// iterate actuators
-				for (unsigned i = 0; i < outputs.noutputs; i++) {
-					// last resort: catch NaN, INF and out-of-band errors
-					if (!isfinite(outputs.output[i]) ||
-						outputs.output[i] < -1.0f ||
-						outputs.output[i] > 1.0f) {
-						/*
-						 * Value is NaN, INF or out of band - set to the minimum value.
-						 * This will be clearly visible on the servo status and will limit the risk of accidentally
-						 * spinning motors. It would be deadly in flight.
-						 */
-						outputs.output[i] = -1.0f;
-					}
-				}
-
-				// Output to the bus
-				_esc_controller.update_outputs(outputs.output, outputs.noutputs);
 			}
 
 		}
 
-		// Check arming state
-		bool updated = false;
-		orb_check(_armed_sub, &updated);
-
-		if (updated) {
-			orb_copy(ORB_ID(actuator_armed), _armed_sub, &_armed);
-
-			// Update the armed status and check that we're not locked down
-			bool set_armed = _armed.armed && !_armed.lockdown;
-
-			arm_actuators(set_armed);
-		}
 	}
 
 	teardown();
@@ -355,42 +297,9 @@ UavcanNode::teardown()
 			_control_subs[i] = -1;
 		}
 	}
-	return ::close(_armed_sub);
+	return 1;
 }
 
-int
-UavcanNode::arm_actuators(bool arm)
-{
-	_is_armed = arm;
-	_esc_controller.arm_esc(arm);
-	return OK;
-}
-
-void
-UavcanNode::subscribe()
-{
-	// Subscribe/unsubscribe to required actuator control groups
-	uint32_t sub_groups = _groups_required & ~_groups_subscribed;
-	uint32_t unsub_groups = _groups_subscribed & ~_groups_required;
-	_poll_fds_num = 0;
-	for (unsigned i = 0; i < NUM_ACTUATOR_CONTROL_GROUPS; i++) {
-		if (sub_groups & (1 << i)) {
-			warnx("subscribe to actuator_controls_%d", i);
-			_control_subs[i] = orb_subscribe(_control_topics[i]);
-		}
-		if (unsub_groups & (1 << i)) {
-			warnx("unsubscribe from actuator_controls_%d", i);
-			::close(_control_subs[i]);
-			_control_subs[i] = -1;
-		}
-
-		if (_control_subs[i] > 0) {
-			_poll_fds[_poll_fds_num].fd = _control_subs[i];
-			_poll_fds[_poll_fds_num].events = POLLIN;
-			_poll_fds_num++;
-		}
-	}
-}
 
 int
 UavcanNode::ioctl(file *filp, int cmd, unsigned long arg)
@@ -478,8 +387,7 @@ UavcanNode::print_info()
 		warnx("not running, start first");
 	}
 
-	warnx("groups: sub: %u / req: %u / fds: %u", (unsigned)_groups_subscribed, (unsigned)_groups_required, _poll_fds_num);
-	warnx("mixer: %s", (_mixers == nullptr) ? "FAIL" : "OK");
+	warnx("groups: sub: %u / req: %u / fds: %u", (unsigned)0, (unsigned)0, _poll_fds_num);
 }
 
 /*

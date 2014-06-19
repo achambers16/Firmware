@@ -44,9 +44,13 @@
 
 #pragma once
 
+#include <uORB/uORB.h>
+#include <uORB/topics/vehicle_gps_position.h>
+
 #include <uavcan/uavcan.hpp>
 #include <uavcan/equipment/esc/RawCommand.hpp>
 #include <uavcan/equipment/esc/Status.hpp>
+#include <uavcan/equipment/gnss/Fix.hpp>
 
 class UavcanEscController
 {
@@ -55,15 +59,11 @@ public:
 
 	int init();
 
-	void update_outputs(float *outputs, unsigned num_outputs);
-
-	void arm_esc(bool arm);
-
 private:
 	/**
 	 * ESC status message reception will be reported via this callback.
 	 */
-	void esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status> &msg);
+	void gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix> &msg);
 
 	/**
 	 * ESC status will be published to ORB from this callback (fixed rate).
@@ -71,13 +71,13 @@ private:
 	void orb_pub_timer_cb(const uavcan::TimerEvent &event);
 
 
-	static constexpr unsigned MAX_RATE_HZ = 100;			///< XXX make this configurable
-	static constexpr unsigned ESC_STATUS_UPDATE_RATE_HZ = 5;
-	static constexpr unsigned MAX_ESCS = uavcan::equipment::esc::RawCommand::FieldTypes::cmd::MaxSize;
+	static const unsigned MAX_RATE_HZ = 100;			///< XXX make this configurable
+	static const unsigned ESC_STATUS_UPDATE_RATE_HZ = 5;
+
 
 	typedef uavcan::MethodBinder<UavcanEscController*,
-		void (UavcanEscController::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status>&)>
-		StatusCbBinder;
+		void (UavcanEscController::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix>&)>
+		FixCbBinder;
 
 	typedef uavcan::MethodBinder<UavcanEscController*, void (UavcanEscController::*)(const uavcan::TimerEvent&)>
 		TimerCbBinder;
@@ -85,15 +85,21 @@ private:
 	/*
 	 * libuavcan related things
 	 */
-	uavcan::MonotonicTime							_prev_cmd_pub;   ///< rate limiting
-	uavcan::INode								&_node;
+	uavcan::MonotonicTime											_prev_cmd_pub;   ///< rate limiting
+	uavcan::INode													&_node;
 	uavcan::Publisher<uavcan::equipment::esc::RawCommand>			_uavcan_pub_raw_cmd;
-	uavcan::Subscriber<uavcan::equipment::esc::Status, StatusCbBinder>	_uavcan_sub_status;
-	uavcan::TimerEventForwarder<TimerCbBinder>				_orb_timer;
+	uavcan::Subscriber<uavcan::equipment::gnss::Fix, FixCbBinder>	_uavcan_sub_status;
+	uavcan::TimerEventForwarder<TimerCbBinder>						_orb_timer;
 
 	/*
-	 * ESC states
+	 * GNSS msg
 	 */
-	bool 				_armed = false;
-	uavcan::equipment::esc::Status	_states[MAX_ESCS];
+	uavcan::equipment::gnss::Fix	fixMsg;
+
+	/*
+	 * uORB
+	 */
+	struct vehicle_gps_position_s 	_report;					///< uORB topic for gps position
+	orb_advert_t			_report_pub;					///< uORB pub for gps position
+
 };

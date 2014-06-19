@@ -40,14 +40,13 @@
 
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
-#include <uORB/topics/actuator_armed.h>
 
 #include "esc_controller.hpp"
 
 /**
  * @file uavcan_main.hpp
  *
- * Defines basic functinality of UAVCAN node.
+ * Defines basic functionality of UAVCAN node.
  *
  * @author Pavel Kirienko <pavel.kirienko@gmail.com>
  */
@@ -83,10 +82,7 @@ public:
 					 uint8_t control_index,
 					 float &input);
 
-	void		subscribe();
-
 	int		teardown();
-	int		arm_actuators(bool arm);
 
 	void		print_info();
 
@@ -99,9 +95,6 @@ private:
 
 	int			_task = -1;			///< handle to the OS task
 	bool			_task_should_exit = false;	///< flag to indicate to tear down the CAN driver
-	int			_armed_sub = -1;		///< uORB subscription of the arming status
-	actuator_armed_s	_armed;				///< the arming request of the system
-	bool			_is_armed = false;		///< the arming status of the actuators on the bus
 
 	unsigned		_output_count = 0;		///< number of actuators currently available
 
@@ -109,13 +102,7 @@ private:
 	Node			_node;				///< library instance
 	UavcanEscController	_esc_controller;
 
-	MixerGroup		*_mixers = nullptr;
 
-	uint32_t		_groups_required = 0;
-	uint32_t		_groups_subscribed = 0;
-	int			_control_subs[NUM_ACTUATOR_CONTROL_GROUPS_UAVCAN] = {};
-	actuator_controls_s 	_controls[NUM_ACTUATOR_CONTROL_GROUPS_UAVCAN] = {};
-	orb_id_t		_control_topics[NUM_ACTUATOR_CONTROL_GROUPS_UAVCAN] = {};
-	pollfd			_poll_fds[NUM_ACTUATOR_CONTROL_GROUPS_UAVCAN + 1] = {};	///< +1 for /dev/uavcan/busevent
+	pollfd			_poll_fds[1] = {};	///< +1 for /dev/uavcan/busevent
 	unsigned		_poll_fds_num = 0;
 };

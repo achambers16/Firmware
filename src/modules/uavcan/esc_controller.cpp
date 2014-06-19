@@ -44,7 +44,8 @@ UavcanEscController::UavcanEscController(uavcan::INode &node) :
 	_node(node),
 	_uavcan_pub_raw_cmd(node),
 	_uavcan_sub_status(node),
-	_orb_timer(node)
+	_orb_timer(node),
+	_report_pub(-1)
 {
 }
 
@@ -53,7 +54,7 @@ int UavcanEscController::init()
 	int res = -1;
 
 	// ESC status subscription
-	res = _uavcan_sub_status.start(StatusCbBinder(this, &UavcanEscController::esc_status_sub_cb));
+	res = _uavcan_sub_status.start(FixCbBinder(this, &UavcanEscController::gnss_fix_sub_cb));
 	if (res < 0)
 	{
 		warnx("ESC status sub failed %i", res);
@@ -64,58 +65,43 @@ int UavcanEscController::init()
 	_orb_timer.setCallback(TimerCbBinder(this, &UavcanEscController::orb_pub_timer_cb));
 	_orb_timer.startPeriodic(uavcan::MonotonicDuration::fromMSec(1000 / ESC_STATUS_UPDATE_RATE_HZ));
 
+	// Clear the uORB GPS report
+	memset(&_report, 0, sizeof(_report));
+
 	return res;
 }
 
-void UavcanEscController::update_outputs(float *outputs, unsigned num_outputs)
-{
-	assert(outputs != nullptr);
-	assert(num_outputs <= MAX_ESCS);
-
-	/*
-	 * Rate limiting - we don't want to congest the bus
-	 */
-	const auto timestamp = _node.getMonotonicTime();
-	if ((timestamp - _prev_cmd_pub).toUSec() < (1000000 / MAX_RATE_HZ)) {
-		return;
-	}
-	_prev_cmd_pub = timestamp;
-
-	/*
-	 * Fill the command message
-	 * If unarmed, we publish an empty message anyway
-	 */
-	uavcan::equipment::esc::RawCommand msg;
-
-	if (_armed) {
-		for (unsigned i = 0; i < num_outputs; i++) {
-
-			float scaled = (outputs[i] + 1.0F) * 0.5F * uavcan::equipment::esc::RawCommand::CMD_MAX;
-			if (scaled < 1.0F)
-				scaled = 1.0F;  // Since we're armed, we don't want to stop it completely
-
-			assert(scaled >= uavcan::equipment::esc::RawCommand::CMD_MIN);
-			assert(scaled <= uavcan::equipment::esc::RawCommand::CMD_MAX);
-
-			msg.cmd.push_back(scaled);
-		}
-	}
-
-	/*
-	 * Publish the command message to the bus
-	 * Note that for a quadrotor it takes one CAN frame
-	 */
-	(void)_uavcan_pub_raw_cmd.broadcast(msg);
-}
-
-void UavcanEscController::arm_esc(bool arm)
-{
-	_armed = arm;
-}
-
-void UavcanEscController::esc_status_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::esc::Status> &msg)
+void UavcanEscController::gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix> &msg)
 {
 	// TODO save status into a local storage; publish to ORB later from orb_pub_timer_cb()
+
+	_report.timestamp_position = hrt_absolute_time();
+	_report.lat = (int32_t)47.378301e7f;
+	_report.lon = (int32_t)8.538777e7f;
+	_report.alt = (int32_t)400e3f;
+	_report.timestamp_variance = hrt_absolute_time();
+	_report.s_variance_m_s = 10.0f;
+	_report.p_variance_m = 10.0f;
+	_report.c_variance_rad = 0.1f;
+	_report.fix_type = 3;
+	_report.eph_m = 3.0f;
+	_report.epv_m = 7.0f;
+	_report.timestamp_velocity = hrt_absolute_time();
+	_report.vel_n_m_s = 0.0f;
+	_report.vel_e_m_s = 0.0f;
+	_report.vel_d_m_s = 0.0f;
+	_report.vel_m_s = sqrtf(_report.vel_n_m_s * _report.vel_n_m_s + _report.vel_e_m_s * _report.vel_e_m_s + _report.vel_d_m_s * _report.vel_d_m_s);
+	_report.cog_rad = 0.0f;
+	_report.vel_ned_valid = true;
+
+
+	if (_report_pub > 0) {
+		orb_publish(ORB_ID(vehicle_gps_position), _report_pub, &_report);
+
+	} else {
+		_report_pub = orb_advertise(ORB_ID(vehicle_gps_position), &_report);
+	}
+
 }
 
 void UavcanEscController::orb_pub_timer_cb(const uavcan::TimerEvent&)
