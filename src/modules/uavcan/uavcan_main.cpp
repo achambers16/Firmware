@@ -93,8 +93,6 @@ UavcanNode::~UavcanNode()
 	/* clean up the alternate device node */
 		// unregister_driver(PWM_OUTPUT_DEVICE_PATH);
 
-	::close(_armed_sub);
-
 	_instance = nullptr;
 }
 
@@ -291,12 +289,6 @@ UavcanNode::control_callback(uintptr_t handle,
 int
 UavcanNode::teardown()
 {
-	for (unsigned i = 0; i < NUM_ACTUATOR_CONTROL_GROUPS; i++) {
-		if (_control_subs[i] > 0) {
-			::close(_control_subs[i]);
-			_control_subs[i] = -1;
-		}
-	}
 	return 1;
 }
 
@@ -310,7 +302,7 @@ UavcanNode::ioctl(file *filp, int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case PWM_SERVO_ARM:
-		arm_actuators(true);
+//		arm_actuators(true);
 		break;
 
 	case PWM_SERVO_SET_ARM_OK:
@@ -320,7 +312,7 @@ UavcanNode::ioctl(file *filp, int cmd, unsigned long arg)
 		break;
 
 	case PWM_SERVO_DISARM:
-		arm_actuators(false);
+//		arm_actuators(false);
 		break;
 
 	case MIXERIOCGETOUTPUTCOUNT:
@@ -328,11 +320,11 @@ UavcanNode::ioctl(file *filp, int cmd, unsigned long arg)
 		break;
 
 	case MIXERIOCRESET:
-		if (_mixers != nullptr) {
-			delete _mixers;
-			_mixers = nullptr;
-			_groups_required = 0;
-		}
+//		if (_mixers != nullptr) {
+//			delete _mixers;
+//			_mixers = nullptr;
+//			_groups_required = 0;
+//		}
 
 		break;
 
@@ -340,28 +332,28 @@ UavcanNode::ioctl(file *filp, int cmd, unsigned long arg)
 			const char *buf = (const char *)arg;
 			unsigned buflen = strnlen(buf, 1024);
 
-			if (_mixers == nullptr)
-				_mixers = new MixerGroup(control_callback, (uintptr_t)_controls);
-
-			if (_mixers == nullptr) {
-				_groups_required = 0;
-				ret = -ENOMEM;
-
-			} else {
-
-				ret = _mixers->load_from_buf(buf, buflen);
-
-				if (ret != 0) {
-					warnx("mixer load failed with %d", ret);
-					delete _mixers;
-					_mixers = nullptr;
-					_groups_required = 0;
-					ret = -EINVAL;
-				} else {
-
-					_mixers->groups_required(_groups_required);
-				}
-			}
+//			if (_mixers == nullptr)
+//				_mixers = new MixerGroup(control_callback, (uintptr_t)_controls);
+//
+//			if (_mixers == nullptr) {
+//				_groups_required = 0;
+//				ret = -ENOMEM;
+//
+//			} else {
+//
+//				ret = _mixers->load_from_buf(buf, buflen);
+//
+//				if (ret != 0) {
+//					warnx("mixer load failed with %d", ret);
+//					delete _mixers;
+//					_mixers = nullptr;
+//					_groups_required = 0;
+//					ret = -EINVAL;
+//				} else {
+//
+//					_mixers->groups_required(_groups_required);
+//				}
+//			}
 
 			break;
 		}
