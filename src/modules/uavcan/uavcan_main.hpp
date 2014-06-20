@@ -100,7 +100,7 @@ private:
 
 	static UavcanNode	*_instance;			///< singleton pointer
 	Node			_node;				///< library instance
-	UavcanEscController	_esc_controller;
+	UavcanGnssReceiver	_esc_controller;
 
 
 	pollfd			_poll_fds[1] = {};	///< +1 for /dev/uavcan/busevent

@@ -40,6 +40,7 @@
  *     uavcan.equipment.esc.Status
  *
  * @author Pavel Kirienko <pavel.kirienko@gmail.com>
+ * @author Andrew Chambers <achamber@gmail.com>
  */
 
 #pragma once
@@ -50,58 +51,37 @@
 #include <uORB/topics/vehicle_gps_position.h>
 
 #include <uavcan/uavcan.hpp>
-#include <uavcan/equipment/esc/RawCommand.hpp>
-#include <uavcan/equipment/esc/Status.hpp>
 #include <uavcan/equipment/gnss/Fix.hpp>
 
-class UavcanEscController
+class UavcanGnssReceiver
 {
 public:
-	UavcanEscController(uavcan::INode& node);
+	UavcanGnssReceiver(uavcan::INode& node);
 
 	int init();
 
 private:
 	/**
-	 * ESC status message reception will be reported via this callback.
+	 * GNSS fix message will be reported via this callback.
 	 */
 	void gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix> &msg);
 
-	/**
-	 * ESC status will be published to ORB from this callback (fixed rate).
-	 */
-	void orb_pub_timer_cb(const uavcan::TimerEvent &event);
 
-
-	static const unsigned MAX_RATE_HZ = 100;			///< XXX make this configurable
-	static const unsigned ESC_STATUS_UPDATE_RATE_HZ = 5;
-
-
-	typedef uavcan::MethodBinder<UavcanEscController*,
-		void (UavcanEscController::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix>&)>
+	typedef uavcan::MethodBinder<UavcanGnssReceiver*,
+		void (UavcanGnssReceiver::*)(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix>&)>
 		FixCbBinder;
-
-	typedef uavcan::MethodBinder<UavcanEscController*, void (UavcanEscController::*)(const uavcan::TimerEvent&)>
-		TimerCbBinder;
 
 	/*
 	 * libuavcan related things
 	 */
 	uavcan::MonotonicTime											_prev_cmd_pub;   ///< rate limiting
 	uavcan::INode													&_node;
-	uavcan::Publisher<uavcan::equipment::esc::RawCommand>			_uavcan_pub_raw_cmd;
 	uavcan::Subscriber<uavcan::equipment::gnss::Fix, FixCbBinder>	_uavcan_sub_status;
-	uavcan::TimerEventForwarder<TimerCbBinder>						_orb_timer;
-
-	/*
-	 * GNSS msg
-	 */
-	uavcan::equipment::gnss::Fix	fixMsg;
 
 	/*
 	 * uORB
 	 */
-	struct vehicle_gps_position_s 	_report;					///< uORB topic for gps position
-	orb_advert_t			_report_pub;					///< uORB pub for gps position
+	struct vehicle_gps_position_s 	_report;					///< uORB topic for gnss position
+	orb_advert_t			_report_pub;					///< uORB pub for gnss position
 
 };

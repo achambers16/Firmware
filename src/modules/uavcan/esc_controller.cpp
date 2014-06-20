@@ -35,35 +35,31 @@
  * @file esc_controller.cpp
  *
  * @author Pavel Kirienko <pavel.kirienko@gmail.com>
+ * @author Andrew Chambers <achamber@gmail.com>
+ *
  */
 
 #include "esc_controller.hpp"
 #include <systemlib/err.h>
 
-UavcanEscController::UavcanEscController(uavcan::INode &node) :
+UavcanGnssReceiver::UavcanGnssReceiver(uavcan::INode &node) :
 	_node(node),
-	_uavcan_pub_raw_cmd(node),
 	_uavcan_sub_status(node),
-	_orb_timer(node),
 	_report_pub(-1)
 {
 }
 
-int UavcanEscController::init()
+int UavcanGnssReceiver::init()
 {
 	int res = -1;
 
-	// ESC status subscription
-	res = _uavcan_sub_status.start(FixCbBinder(this, &UavcanEscController::gnss_fix_sub_cb));
+	// GNSS fix subscription
+	res = _uavcan_sub_status.start(FixCbBinder(this, &UavcanGnssReceiver::gnss_fix_sub_cb));
 	if (res < 0)
 	{
-		warnx("ESC status sub failed %i", res);
+		warnx("GNSS fix sub failed %i", res);
 		return res;
 	}
-
-	// ESC status will be relayed from UAVCAN bus into ORB at this rate
-	_orb_timer.setCallback(TimerCbBinder(this, &UavcanEscController::orb_pub_timer_cb));
-	_orb_timer.startPeriodic(uavcan::MonotonicDuration::fromMSec(1000 / ESC_STATUS_UPDATE_RATE_HZ));
 
 	// Clear the uORB GPS report
 	memset(&_report, 0, sizeof(_report));
@@ -71,28 +67,33 @@ int UavcanEscController::init()
 	return res;
 }
 
-void UavcanEscController::gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix> &msg)
+void UavcanGnssReceiver::gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::gnss::Fix> &msg)
 {
-	// TODO save status into a local storage; publish to ORB later from orb_pub_timer_cb()
-
 	_report.timestamp_position = hrt_absolute_time();
-	_report.lat = (int32_t)47.378301e7f;
-	_report.lon = (int32_t)8.538777e7f;
-	_report.alt = (int32_t)400e3f;
+
+	_report.lat = (int32_t)msg.lat_1e7;
+	_report.lon = (int32_t)msg.lon_1e7;
+	_report.alt = (int32_t)msg.alt_1e2 * 10;			// Convert from decimeter to centimeter
+
 	_report.timestamp_variance = hrt_absolute_time();
 	_report.s_variance_m_s = 10.0f;
 	_report.p_variance_m = 10.0f;
 	_report.c_variance_rad = 0.1f;
-	_report.fix_type = 3;
+	_report.fix_type = msg.status;
+
 	_report.eph_m = 3.0f;
 	_report.epv_m = 7.0f;
 	_report.timestamp_velocity = hrt_absolute_time();
-	_report.vel_n_m_s = 0.0f;
-	_report.vel_e_m_s = 0.0f;
-	_report.vel_d_m_s = 0.0f;
+
+	_report.vel_n_m_s = (float)msg.ned_velocity[0];
+	_report.vel_e_m_s = (float)msg.ned_velocity[1];
+	_report.vel_d_m_s = (float)msg.ned_velocity[2];
 	_report.vel_m_s = sqrtf(_report.vel_n_m_s * _report.vel_n_m_s + _report.vel_e_m_s * _report.vel_e_m_s + _report.vel_d_m_s * _report.vel_d_m_s);
+
 	_report.cog_rad = 0.0f;
 	_report.vel_ned_valid = true;
+
+	_report.satellites_visible = msg.sats_used;
 
 
 	if (_report_pub > 0) {
@@ -102,9 +103,4 @@ void UavcanEscController::gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<ua
 		_report_pub = orb_advertise(ORB_ID(vehicle_gps_position), &_report);
 	}
 
-}
-
-void UavcanEscController::orb_pub_timer_cb(const uavcan::TimerEvent&)
-{
-	// TODO publish to ORB
 }
