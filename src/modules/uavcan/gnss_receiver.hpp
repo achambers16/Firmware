@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file esc_controller.hpp
+ * @file gnss_receiver.hpp
  *
  * UAVCAN <--> ORB bridge for ESC messages:
  *     uavcan.equipment.esc.RawCommand
@@ -74,7 +74,6 @@ private:
 	/*
 	 * libuavcan related things
 	 */
-	uavcan::MonotonicTime											_prev_cmd_pub;   ///< rate limiting
 	uavcan::INode													&_node;
 	uavcan::Subscriber<uavcan::equipment::gnss::Fix, FixCbBinder>	_uavcan_sub_status;
 

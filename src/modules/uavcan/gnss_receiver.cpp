@@ -32,14 +32,14 @@
  ****************************************************************************/
 
 /**
- * @file esc_controller.cpp
+ * @file gnss_receiver.cpp
  *
  * @author Pavel Kirienko <pavel.kirienko@gmail.com>
  * @author Andrew Chambers <achamber@gmail.com>
  *
  */
 
-#include "esc_controller.hpp"
+#include "gnss_receiver.hpp"
 #include <systemlib/err.h>
 
 UavcanGnssReceiver::UavcanGnssReceiver(uavcan::INode &node) :

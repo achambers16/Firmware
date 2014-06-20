@@ -41,7 +41,7 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
 
-#include "esc_controller.hpp"
+#include "gnss_receiver.hpp"
 
 /**
  * @file uavcan_main.hpp
@@ -100,7 +100,7 @@ private:
 
 	static UavcanNode	*_instance;			///< singleton pointer
 	Node			_node;				///< library instance
-	UavcanGnssReceiver	_esc_controller;
+	UavcanGnssReceiver	_gnss_receiver;
 
 
 	pollfd			_poll_fds[1] = {};	///< +1 for /dev/uavcan/busevent

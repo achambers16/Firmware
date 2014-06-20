@@ -63,7 +63,7 @@ UavcanNode *UavcanNode::_instance;
 UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &system_clock) :
 	CDev("uavcan", UAVCAN_DEVICE_PATH),
 	_node(can_driver, system_clock),
-	_esc_controller(_node)
+	_gnss_receiver(_node)
 {
 	// memset(_controls, 0, sizeof(_controls));
 	// memset(_poll_fds, 0, sizeof(_poll_fds));
@@ -175,7 +175,7 @@ int UavcanNode::init(uavcan::NodeID node_id)
 	if (ret != OK)
 		return ret;
 
-	ret = _esc_controller.init();
+	ret = _gnss_receiver.init();
 	if (ret < 0)
 		return ret;
 

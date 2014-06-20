@@ -42,7 +42,7 @@ MAXOPTIMIZATION = -Os
 
 SRCS += uavcan_main.cpp     \
         uavcan_clock.cpp    \
-        esc_controller.cpp
+        gnss_receiver.cpp
 
 #
 # libuavcan
