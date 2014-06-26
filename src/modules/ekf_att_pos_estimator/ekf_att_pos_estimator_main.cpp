@@ -808,6 +808,7 @@ FixedwingEstimator::task_main()
 				orb_copy(ORB_ID(vehicle_gps_position), _gps_sub, &_gps);
 				perf_count(_perf_gps);
 
+				/* Ignore GPS data if not 3D fix */
 				if (_gps.fix_type < 3) {
 					newDataGps = false;
 
@@ -827,9 +828,14 @@ FixedwingEstimator::task_main()
 
 					//_gps.timestamp / 1e3;
 					_ekf->GPSstatus = _gps.fix_type;
-					_ekf->velNED[0] = _gps.vel_n_m_s;
-					_ekf->velNED[1] = _gps.vel_e_m_s;
-					_ekf->velNED[2] = _gps.vel_d_m_s;
+					if (_gps.vel_ned_valid) {
+						_ekf->velNED[0] = _gps.vel_n_m_s;
+						_ekf->velNED[1] = _gps.vel_e_m_s;
+						_ekf->velNED[2] = _gps.vel_d_m_s;
+					} else {
+						// Set velocity to zero for invalid GPS NED velocity
+						memset(_ekf->velNED,0.0,sizeof(_ekf->velNED));
+					}
 
 					// warnx("GPS updated: status: %d, vel: %8.4f %8.4f %8.4f", (int)GPSstatus, velNED[0], velNED[1], velNED[2]);
 
@@ -1026,13 +1032,23 @@ FixedwingEstimator::task_main()
 
 			if ((hrt_elapsed_time(&_filter_start_time) > FILTER_INIT_DELAY) && _baro_init && _gyro_valid && _accel_valid && _mag_valid) {
 
-				float initVelNED[3];
+				float initVelNED[3] = {0.0};
 
+				/*
+				 * Filter initialization
+				 * If valid GPS 3D fix and dilution of position is within threshold, initialize with GPS data
+				 * Else, initialize state vector with zero position and zero velocity
+				 */
 				if (!_gps_initialized && _gps.fix_type > 2 && _gps.eph_m < _parameters.pos_stddev_threshold && _gps.epv_m < _parameters.pos_stddev_threshold) {
 
-					initVelNED[0] = _gps.vel_n_m_s;
-					initVelNED[1] = _gps.vel_e_m_s;
-					initVelNED[2] = _gps.vel_d_m_s;
+					if (_gps.vel_ned_valid) {
+						initVelNED[0] = _gps.vel_n_m_s;
+						initVelNED[1] = _gps.vel_e_m_s;
+						initVelNED[2] = _gps.vel_d_m_s;
+					} else {
+						// Set velocity to zero for invalid GPS NED velocity
+						memset(initVelNED,0.0,sizeof(initVelNED));
+					}
 
 					// GPS is in scaled integers, convert
 					double lat = _gps.lat / 1.0e7;
@@ -1091,6 +1107,7 @@ FixedwingEstimator::task_main()
 				}
 			}
 
+			/* PREDICTION */
 			// If valid IMU data and states initialised, predict states and covariances
 			if (_ekf->statesInitialised) {
 				// Run the strapdown INS equations every IMU update
@@ -1131,26 +1148,46 @@ FixedwingEstimator::task_main()
 				_initialized = true;
 			}
 
+			/* CORRECTIONS */
 			// Fuse GPS Measurements
 			if (newDataGps && _gps_initialized) {
 				// Convert GPS measurements to Pos NE, hgt and Vel NED
-				_ekf->velNED[0] = _gps.vel_n_m_s;
-				_ekf->velNED[1] = _gps.vel_e_m_s;
-				_ekf->velNED[2] = _gps.vel_d_m_s;
+
+				// Velocity (NED)
+				if (_gps.vel_ned_valid) {
+					_ekf->velNED[0] = _gps.vel_n_m_s;
+					_ekf->velNED[1] = _gps.vel_e_m_s;
+					_ekf->velNED[2] = _gps.vel_d_m_s;
+
+					// set fusion flag
+					_ekf->fuseVelData = true;
+
+					// recall states stored at time of measurement after adjusting for delays
+					_ekf->RecallStates(_ekf->statesAtVelTime, (IMUmsec - _parameters.vel_delay_ms));
+				} else {
+					_ekf->fuseVelData = false;
+				}
+
+				// Position (NE)
 				_ekf->calcposNED(_ekf->posNED, _ekf->gpsLat, _ekf->gpsLon, _ekf->gpsHgt, _ekf->latRef, _ekf->lonRef, _ekf->hgtRef);
 
 				_ekf->posNE[0] = _ekf->posNED[0];
 				_ekf->posNE[1] = _ekf->posNED[1];
-				// set fusion flags
-				_ekf->fuseVelData = true;
+
+				// set fusion flag
 				_ekf->fusePosData = true;
+
 				// recall states stored at time of measurement after adjusting for delays
-				_ekf->RecallStates(_ekf->statesAtVelTime, (IMUmsec - _parameters.vel_delay_ms));
 				_ekf->RecallStates(_ekf->statesAtPosTime, (IMUmsec - _parameters.pos_delay_ms));
+
 				// run the fusion step
 				_ekf->FuseVelposNED();
 
+				/*
 			} else if (_ekf->statesInitialised) {
+				// Filter is initialized and running but never initialized with GPS
+				// Continue to assume zero position and velocity
+
 				// Convert GPS measurements to Pos NE, hgt and Vel NED
 				_ekf->velNED[0] = 0.0f;
 				_ekf->velNED[1] = 0.0f;
@@ -1169,6 +1206,7 @@ FixedwingEstimator::task_main()
 				_ekf->RecallStates(_ekf->statesAtPosTime, (IMUmsec - _parameters.pos_delay_ms));
 				// run the fusion step
 				_ekf->FuseVelposNED();
+				 */
 
 			} else {
 				_ekf->fuseVelData = false;
@@ -1209,10 +1247,8 @@ FixedwingEstimator::task_main()
 				_ekf->fuseVtasData = false;
 			}
 
-			// Publish results
+			/* PUBLISH RESULTS */
 			if (_initialized && (check == OK)) {
-
-
 
 				// State vector:
 				// 0-3: quaternions (q0, q1, q2, q3)
