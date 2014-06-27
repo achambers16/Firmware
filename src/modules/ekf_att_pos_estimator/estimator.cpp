@@ -933,7 +933,7 @@ void AttPosEKF::CovariancePrediction(float dt)
     }
 
     // If on ground or no magnetometer fitted, inhibit magnetometer bias updates by
-    // setting the coresponding covariance terms to zero.
+    // setting the corresponding covariance terms to zero.
     if (onGround || !useCompass)
     {
         zeroRows(nextP,16,21);
@@ -949,14 +949,14 @@ void AttPosEKF::CovariancePrediction(float dt)
     }
 
     // If on ground, inhibit terrain offset updates by
-    // setting the coresponding covariance terms to zero.
+    // setting the corresponding covariance terms to zero.
     if (onGround)
     {
         zeroRows(nextP,22,22);
         zeroCols(nextP,22,22);
     }
 
-    // If the total position variance exceds 1E6 (1000m), then stop covariance
+    // If the total position variance exceeds 1E6 (1000m), then stop covariance
     // growth by setting the predicted to the previous values
     // This prevent an ill conditioned matrix from occurring for long periods
     // without GPS

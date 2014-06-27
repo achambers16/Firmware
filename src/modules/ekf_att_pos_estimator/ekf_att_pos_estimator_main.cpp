@@ -129,6 +129,8 @@ public:
 	 */
 	void		print_status();
 
+	int debug_run();
+
 	/**
 	 * Trip the filter by feeding it NaN values.
 	 */
@@ -837,7 +839,8 @@ FixedwingEstimator::task_main()
 						memset(_ekf->velNED,0.0,sizeof(_ekf->velNED));
 					}
 
-					// warnx("GPS updated: status: %d, vel: %8.4f %8.4f %8.4f", (int)GPSstatus, velNED[0], velNED[1], velNED[2]);
+					 warnx("GPS updated: status: %d, vel: %8.4f %8.4f %8.4f",
+							 (int)_ekf->GPSstatus, _ekf->velNED[0], _ekf->velNED[1], _ekf->velNED[2]);
 
 					_ekf->gpsLat = math::radians(_gps.lat / (double)1e7);
 					_ekf->gpsLon = math::radians(_gps.lon / (double)1e7) - M_PI;
@@ -1047,6 +1050,7 @@ FixedwingEstimator::task_main()
 						initVelNED[2] = _gps.vel_d_m_s;
 					} else {
 						// Set velocity to zero for invalid GPS NED velocity
+						warnx("Invalid GPS velocity during initialization");
 						memset(initVelNED,0.0,sizeof(initVelNED));
 					}
 
@@ -1056,6 +1060,7 @@ FixedwingEstimator::task_main()
 					float gps_alt = _gps.alt / 1e3f;
 
 					// Set up height correctly
+					// XXX What if there is no barometric data?
 					orb_copy(ORB_ID(sensor_baro), _baro_sub, &_baro);
 					_baro_gps_offset = _baro_ref - _baro.altitude;
 					_ekf->baroHgt = _baro.altitude;
@@ -1104,6 +1109,8 @@ FixedwingEstimator::task_main()
 					_baro_gps_offset = 0.0f;
 
 					_ekf->InitialiseFilter(initVelNED, 0.0, 0.0, 0.0f, 0.0f);
+
+					warnx("Initializing filter without GPS");
 				}
 			}
 
@@ -1165,6 +1172,7 @@ FixedwingEstimator::task_main()
 					// recall states stored at time of measurement after adjusting for delays
 					_ekf->RecallStates(_ekf->statesAtVelTime, (IMUmsec - _parameters.vel_delay_ms));
 				} else {
+					warnx("Recieved GPS without valid velocity");
 					_ekf->fuseVelData = false;
 				}
 
@@ -1183,10 +1191,11 @@ FixedwingEstimator::task_main()
 				// run the fusion step
 				_ekf->FuseVelposNED();
 
-				/*
 			} else if (_ekf->statesInitialised) {
 				// Filter is initialized and running but never initialized with GPS
 				// Continue to assume zero position and velocity
+
+				warnx("Running filter without valid GPS");
 
 				// Convert GPS measurements to Pos NE, hgt and Vel NED
 				_ekf->velNED[0] = 0.0f;
@@ -1206,7 +1215,6 @@ FixedwingEstimator::task_main()
 				_ekf->RecallStates(_ekf->statesAtPosTime, (IMUmsec - _parameters.pos_delay_ms));
 				// run the fusion step
 				_ekf->FuseVelposNED();
-				 */
 
 			} else {
 				_ekf->fuseVelData = false;
@@ -1405,6 +1413,14 @@ FixedwingEstimator::start()
 	return OK;
 }
 
+int
+FixedwingEstimator::debug_run()
+{
+	// XXX DEBUG
+	task_main();
+	return OK;
+}
+
 void
 FixedwingEstimator::print_status()
 {
@@ -1435,16 +1451,18 @@ FixedwingEstimator::print_status()
 	printf("states (wind)      [14-15]: %8.4f, %8.4f\n", (double)_ekf->states[13], (double)_ekf->states[14]);
 	printf("states (earth mag) [16-18]: %8.4f, %8.4f, %8.4f\n", (double)_ekf->states[15], (double)_ekf->states[16], (double)_ekf->states[17]);
 	printf("states (body mag)  [19-21]: %8.4f, %8.4f, %8.4f\n", (double)_ekf->states[18], (double)_ekf->states[19], (double)_ekf->states[20]);
-	printf("states: %s %s %s %s %s %s %s %s %s %s\n",
+	printf("states: %s %s %s %s %s %s %s %s %s %s %s %s\n",
 	       (_ekf->statesInitialised) ? "INITIALIZED" : "NON_INIT",
 	       (_ekf->onGround) ? "ON_GROUND" : "AIRBORNE",
 	       (_ekf->fuseVelData) ? "FUSE_VEL" : "INH_VEL",
 	       (_ekf->fusePosData) ? "FUSE_POS" : "INH_POS",
 	       (_ekf->fuseHgtData) ? "FUSE_HGT" : "INH_HGT",
 	       (_ekf->fuseMagData) ? "FUSE_MAG" : "INH_MAG",
+  	       (_ekf->fuseRngData) ? "FUSE_RANGE" : "INH_RANGE",
 	       (_ekf->fuseVtasData) ? "FUSE_VTAS" : "INH_VTAS",
 	       (_ekf->useAirspeed) ? "USE_AIRSPD" : "IGN_AIRSPD",
 	       (_ekf->useCompass) ? "USE_COMPASS" : "IGN_COMPASS",
+	       (_ekf->useRangeFinder) ? "USE_RANGE" : "IGN_RANGE",
 	       (_ekf->staticMode) ? "STATIC_MODE" : "DYNAMIC_MODE");
 }
 
@@ -1520,6 +1538,25 @@ int ekf_att_pos_estimator_main(int argc, char *argv[])
 
 		exit(0);
 	}
+
+	if (!strcmp(argv[1], "debug_run")) {
+		if (estimator::g_estimator != nullptr)
+			errx(1, "already running");
+
+		estimator::g_estimator = new FixedwingEstimator;
+
+		if (estimator::g_estimator == nullptr)
+			errx(1, "alloc failed");
+
+		if (OK != estimator::g_estimator->debug_run()) {
+			delete estimator::g_estimator;
+			estimator::g_estimator = nullptr;
+			err(1, "start failed");
+		}
+
+		exit(0);
+	}
+
 
 	if (!strcmp(argv[1], "stop")) {
 		if (estimator::g_estimator == nullptr)
