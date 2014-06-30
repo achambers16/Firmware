@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2013, 2014 PX4 Development Team. All rights reserved.
+ *   Copyright (C) 2013 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,86 +32,11 @@
  ****************************************************************************/
 
 /**
- * @file fw_att_pos_estimator_params.c
+ * nsh_romfsetc.h
  *
- * Parameters defined by the attitude and position estimator task
- *
- * @author Lorenz Meier <lm@inf.ethz.ch>
+ * This file is a stub for 'make export' purposes; the actual ROMFS
+ * must be supplied by the library client.
  */
 
-#include <nuttx/config.h>
-
-#include <systemlib/param/param.h>
-
-/*
- * Estimator parameters, accessible via MAVLink
- *
- */
-
-/**
- * Velocity estimate delay
- *
- * The delay in milliseconds of the velocity estimate from GPS.
- *
- * @min 0
- * @max 1000
- * @group Position Estimator
- */
-PARAM_DEFINE_INT32(PE_VEL_DELAY_MS, 230);
-
-/**
- * Position estimate delay
- *
- * The delay in milliseconds of the position estimate from GPS.
- *
- * @min 0
- * @max 1000
- * @group Position Estimator
- */
-PARAM_DEFINE_INT32(PE_POS_DELAY_MS, 210);
-
-/**
- * Height estimate delay
- *
- * The delay in milliseconds of the height estimate from the barometer.
- *
- * @min 0
- * @max 1000
- * @group Position Estimator
- */
-PARAM_DEFINE_INT32(PE_HGT_DELAY_MS, 350);
-
-/**
- * Mag estimate delay
- *
- * The delay in milliseconds of the magnetic field estimate from
- * the magnetometer.
- *
- * @min 0
- * @max 1000
- * @group Position Estimator
- */
-PARAM_DEFINE_INT32(PE_MAG_DELAY_MS, 30);
-
-/**
- * True airspeeed estimate delay
- *
- * The delay in milliseconds of the airspeed estimate.
- *
- * @min 0
- * @max 1000
- * @group Position Estimator
- */
-PARAM_DEFINE_INT32(PE_TAS_DELAY_MS, 210);
-
-/**
- * GPS vs. barometric altitude update weight
- *
- * RE-CHECK this.
- *
- * @min 0.0
- * @max 1.0
- * @group Position Estimator
- */
-PARAM_DEFINE_FLOAT(PE_GPS_ALT_WGT, 0.9f);
-
+extern unsigned char romfs_img[];
+extern unsigned int romfs_img_len;

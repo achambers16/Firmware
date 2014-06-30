@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2012, 2013 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2014 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,19 +31,41 @@
  *
  ****************************************************************************/
 
-#include <systemlib/param/param.h>
+/**
+ * @file drv_io_expander.h
+ *
+ * IO expander device API
+ */
 
-/*PARAM_DEFINE_FLOAT(NAME,0.0f);*/
-PARAM_DEFINE_FLOAT(KF_V_GYRO, 0.008f);
-PARAM_DEFINE_FLOAT(KF_V_ACCEL, 1.0f);
-PARAM_DEFINE_FLOAT(KF_R_MAG, 0.8f);
-PARAM_DEFINE_FLOAT(KF_R_GPS_VEL, 0.5f);
-PARAM_DEFINE_FLOAT(KF_R_GPS_POS, 2.0f);
-PARAM_DEFINE_FLOAT(KF_R_GPS_ALT, 3.0f);
-PARAM_DEFINE_FLOAT(KF_R_PRESS_ALT, 0.1f);
-PARAM_DEFINE_FLOAT(KF_R_ACCEL, 1.0f);
-PARAM_DEFINE_FLOAT(KF_FAULT_POS, 10.0f);
-PARAM_DEFINE_FLOAT(KF_FAULT_ATT, 10.0f);
-PARAM_DEFINE_FLOAT(KF_ENV_G, 9.765f);
-PARAM_DEFINE_FLOAT(KF_ENV_MAG_DIP, 60.0f);
-PARAM_DEFINE_FLOAT(KF_ENV_MAG_DEC, 0.0f);
+#pragma once
+
+#include <stdint.h>
+#include <sys/ioctl.h>
+
+/*
+ * ioctl() definitions
+ */
+
+#define _IOXIOCBASE		(0x2800)
+#define _IOXIOC(_n)		(_IOC(_IOXIOCBASE, _n))
+
+/** set a bitmask (non-blocking) */
+#define IOX_SET_MASK		_IOXIOC(1)
+
+/** get a bitmask (blocking) */
+#define IOX_GET_MASK		_IOXIOC(2)
+
+/** set device mode (non-blocking) */
+#define IOX_SET_MODE		_IOXIOC(3)
+
+/** set constant values (non-blocking) */
+#define IOX_SET_VALUE		_IOXIOC(4)
+
+/* ... to IOX_SET_VALUE + 8 */
+
+/* enum passed to RGBLED_SET_MODE ioctl()*/
+enum IOX_MODE {
+	IOX_MODE_OFF,
+	IOX_MODE_ON,
+	IOX_MODE_TEST_OUT
+};
