@@ -95,6 +95,7 @@ void UavcanGnssReceiver::gnss_fix_sub_cb(const uavcan::ReceivedDataStructure<uav
 
 	_report.satellites_visible = msg.sats_used;
 
+	warnx("GPS message received: %i, %i, %i", _report.lat, _report.lon, _report.alt);
 
 	if (_report_pub > 0) {
 		orb_publish(ORB_ID(vehicle_gps_position), _report_pub, &_report);

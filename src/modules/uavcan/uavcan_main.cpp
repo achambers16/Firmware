@@ -61,7 +61,6 @@
 UavcanNode *UavcanNode::_instance;
 
 UavcanNode::UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &system_clock) :
-	CDev("uavcan", UAVCAN_DEVICE_PATH),
 	_node(can_driver, system_clock),
 	_gnss_receiver(_node)
 {
@@ -169,12 +168,6 @@ int UavcanNode::init(uavcan::NodeID node_id)
 {
 	int ret = -1;
 
-	/* do regular cdev init */
-	ret = CDev::init();
-
-	if (ret != OK)
-		return ret;
-
 	ret = _gnss_receiver.init();
 	if (ret < 0)
 		return ret;
@@ -207,12 +200,6 @@ void UavcanNode::node_spin_once()
 int UavcanNode::run()
 {
 	const unsigned PollTimeoutMs = 50;
-
-	// XXX figure out the output count
-	_output_count = 2;
-
-	actuator_outputs_s outputs;
-	memset(&outputs, 0, sizeof(outputs));
 
 	const int busevent_fd = ::open(uavcan_stm32::BusEvent::DevName, 0);
 	if (busevent_fd < 0)
@@ -248,8 +235,8 @@ int UavcanNode::run()
 
 		// Check the state of poll return value
 		if (poll_ret < 0) {
-			// Error occured
-			log("poll error %d", errno);
+			// Error occurred
+			warnx("poll error %d", errno);
 			continue;
 		} else if (poll_ret == 0) {
 			// Timeout occurred
@@ -275,101 +262,9 @@ int UavcanNode::run()
 }
 
 int
-UavcanNode::control_callback(uintptr_t handle,
-			 uint8_t control_group,
-			 uint8_t control_index,
-			 float &input)
-{
-	const actuator_controls_s *controls = (actuator_controls_s *)handle;
-
-	input = controls[control_group].control[control_index];
-	return 0;
-}
-
-int
 UavcanNode::teardown()
 {
 	return 1;
-}
-
-
-int
-UavcanNode::ioctl(file *filp, int cmd, unsigned long arg)
-{
-	int ret = OK;
-
-	lock();
-
-	switch (cmd) {
-	case PWM_SERVO_ARM:
-//		arm_actuators(true);
-		break;
-
-	case PWM_SERVO_SET_ARM_OK:
-	case PWM_SERVO_CLEAR_ARM_OK:
-	case PWM_SERVO_SET_FORCE_SAFETY_OFF:
-		// these are no-ops, as no safety switch
-		break;
-
-	case PWM_SERVO_DISARM:
-//		arm_actuators(false);
-		break;
-
-	case MIXERIOCGETOUTPUTCOUNT:
-		*(unsigned *)arg = _output_count;
-		break;
-
-	case MIXERIOCRESET:
-//		if (_mixers != nullptr) {
-//			delete _mixers;
-//			_mixers = nullptr;
-//			_groups_required = 0;
-//		}
-
-		break;
-
-	case MIXERIOCLOADBUF: {
-			const char *buf = (const char *)arg;
-			unsigned buflen = strnlen(buf, 1024);
-
-//			if (_mixers == nullptr)
-//				_mixers = new MixerGroup(control_callback, (uintptr_t)_controls);
-//
-//			if (_mixers == nullptr) {
-//				_groups_required = 0;
-//				ret = -ENOMEM;
-//
-//			} else {
-//
-//				ret = _mixers->load_from_buf(buf, buflen);
-//
-//				if (ret != 0) {
-//					warnx("mixer load failed with %d", ret);
-//					delete _mixers;
-//					_mixers = nullptr;
-//					_groups_required = 0;
-//					ret = -EINVAL;
-//				} else {
-//
-//					_mixers->groups_required(_groups_required);
-//				}
-//			}
-
-			break;
-		}
-
-	default:
-		ret = -ENOTTY;
-		break;
-	}
-
-	unlock();
-
-	if (ret == -ENOTTY) {
-		ret = CDev::ioctl(filp, cmd, arg);
-	}
-
-	return ret;
 }
 
 void

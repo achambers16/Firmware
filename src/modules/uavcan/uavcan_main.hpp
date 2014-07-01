@@ -36,10 +36,6 @@
 #include <nuttx/config.h>
 
 #include <uavcan_stm32/uavcan_stm32.hpp>
-#include <drivers/device/device.h>
-
-#include <uORB/topics/actuator_controls.h>
-#include <uORB/topics/actuator_outputs.h>
 
 #include "gnss_receiver.hpp"
 
@@ -51,13 +47,10 @@
  * @author Pavel Kirienko <pavel.kirienko@gmail.com>
  */
 
-#define NUM_ACTUATOR_CONTROL_GROUPS_UAVCAN	4
-#define UAVCAN_DEVICE_PATH	"/dev/uavcan/esc"
-
 /**
  * A UAVCAN node.
  */
-class UavcanNode : public device::CDev
+class UavcanNode
 {
 	static constexpr unsigned MemPoolSize        = 10752;
 	static constexpr unsigned RxQueueLenPerIface = 64;
@@ -70,8 +63,6 @@ public:
 	UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &system_clock);
 
 	virtual		~UavcanNode();
-
-	virtual int	ioctl(file *filp, int cmd, unsigned long arg);
 
 	static int	start(uavcan::NodeID node_id, uint32_t bitrate);
 
